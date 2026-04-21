@@ -344,19 +344,19 @@ export function PassengerPage() {
         </div>
       ) : null}
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200 bg-white px-4 py-2 pb-safe">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200 bg-white px-4 pt-1 pb-[calc(env(safe-area-inset-bottom)+14px)]">
         <div className="mx-auto flex max-w-[430px] items-center justify-around">
-          <button type="button" onClick={() => setActiveTab("inicio")} className={`flex flex-col items-center gap-0.5 rounded-xl px-4 py-1 ${activeTab === "inicio" ? "text-[#14B8A6]" : "text-gray-400"}`}>
+          <button type="button" onClick={() => setActiveTab("inicio")} className={`flex -translate-y-1 flex-col items-center gap-0.5 rounded-xl px-4 py-1 ${activeTab === "inicio" ? "text-[#14B8A6]" : "text-gray-400"}`}>
             <Home className="h-5 w-5" />
             <span className="text-xs font-medium">Inicio</span>
           </button>
 
-          <button type="button" onClick={() => setActiveTab("pagamentos")} className={`flex flex-col items-center gap-0.5 rounded-xl px-4 py-1 ${activeTab === "pagamentos" ? "text-[#14B8A6]" : "text-gray-400"}`}>
+          <button type="button" onClick={() => setActiveTab("pagamentos")} className={`flex -translate-y-1 flex-col items-center gap-0.5 rounded-xl px-4 py-1 ${activeTab === "pagamentos" ? "text-[#14B8A6]" : "text-gray-400"}`}>
             <CreditCard className="h-5 w-5" />
             <span className="text-xs font-medium">Pagamentos</span>
           </button>
 
-          <button type="button" onClick={() => setActiveTab("suporte")} className={`flex flex-col items-center gap-0.5 rounded-xl px-4 py-1 ${activeTab === "suporte" ? "text-[#14B8A6]" : "text-gray-400"}`}>
+          <button type="button" onClick={() => setActiveTab("suporte")} className={`flex -translate-y-1 flex-col items-center gap-0.5 rounded-xl px-4 py-1 ${activeTab === "suporte" ? "text-[#14B8A6]" : "text-gray-400"}`}>
             <MessageCircle className="h-5 w-5" />
             <span className="text-xs font-medium">Suporte</span>
           </button>

@@ -9,6 +9,7 @@ import { PassengerPaymentPage } from "@/pages/PassengerPaymentPage";
 import { PassengersPage } from "@/pages/PassengersPage";
 import { PaymentsPage } from "@/pages/PaymentsPage";
 import { PortalPage } from "@/pages/PortalPage";
+import { RegisterPage } from "@/pages/RegisterPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 
 export function AppRouter() {
@@ -16,6 +17,7 @@ export function AppRouter() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/cadastro" element={<RegisterPage />} />
 
         <Route path="/" element={<RedirectByRole />} />
 

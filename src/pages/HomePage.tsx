@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { BarChart3, Bell, Clock } from "lucide-react";
 
 import { SectionEyebrow } from "@/components/common/SectionEyebrow";
@@ -8,6 +8,7 @@ import { GreetingHeader } from "@/components/home/GreetingHeader";
 import { MonthSummaryCard } from "@/components/home/MonthSummaryCard";
 import { RouteSummaryGrid } from "@/components/home/RouteSummaryGrid";
 import { useDashboardStats } from "@/hooks/useDashboardStats";
+import { apiListPendingReceipts, apiSetReceiptStatus } from "@/services/api";
 import { downloadMonthlyReportCsv, downloadMonthlyReportPdf } from "@/services/report";
 import { openWhatsApp } from "@/services/whatsapp";
 import { usePaymentStore } from "@/store/usePaymentStore";
@@ -19,11 +20,18 @@ export function HomePage() {
   const monthPayments = usePaymentStore((state) => state.monthPayments);
   const [toast, setToast] = useState<string | null>(null);
   const [showReportPicker, setShowReportPicker] = useState(false);
+  const [pendingReceipts, setPendingReceipts] = useState<Array<{ id: string; passengerNome: string; passengerTelefone: string; mes: number; ano: number; receiptStatus?: string }>>([]);
 
   const showToast = (message: string) => {
     setToast(message);
     window.setTimeout(() => setToast(null), 2400);
   };
+
+  useEffect(() => {
+    apiListPendingReceipts()
+      .then((rows) => setPendingReceipts(rows))
+      .catch(() => setPendingReceipts([]));
+  }, []);
 
   const notifyOverdue = () => {
     const overdueRows = monthPayments(month.mes, month.ano).filter((row) => row.status === "atrasado");
@@ -74,6 +82,16 @@ export function HomePage() {
     setShowReportPicker(false);
   };
 
+  const setReceiptStatus = async (paymentId: string, status: "approved" | "rejected") => {
+    try {
+      await apiSetReceiptStatus(paymentId, status);
+      setPendingReceipts((rows) => rows.filter((row) => row.id !== paymentId));
+      showToast(status === "approved" ? "Comprovante aprovado." : "Comprovante rejeitado.");
+    } catch {
+      showToast("Falha ao atualizar comprovante.");
+    }
+  };
+
   return (
     <div className="pb-28">
       {toast ? <Toast message={toast} /> : null}
@@ -122,6 +140,41 @@ export function HomePage() {
         <section id="rotas">
           <SectionEyebrow>RESUMO POR ROTA</SectionEyebrow>
           <RouteSummaryGrid rows={stats.routeSummary} />
+        </section>
+
+        <section id="comprovantes">
+          <SectionEyebrow>COMPROVANTES PENDENTES</SectionEyebrow>
+          {pendingReceipts.length === 0 ? (
+            <div className="rounded-card bg-white p-4 text-[14px] text-ink-500 shadow-card">Nenhum comprovante pendente.</div>
+          ) : (
+            <div className="space-y-2">
+              {pendingReceipts.map((item) => (
+                <div key={item.id} className="rounded-card bg-white p-4 shadow-card">
+                  <p className="text-[14px] font-semibold text-ink-900">{item.passengerNome}</p>
+                  <p className="text-[12px] text-ink-500">{item.passengerTelefone}</p>
+                  <p className="mt-1 text-[12px] text-ink-500">
+                    {String(item.mes).padStart(2, "0")}/{item.ano} • {item.receiptStatus ?? "in_review"}
+                  </p>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setReceiptStatus(item.id, "approved")}
+                      className="h-10 rounded-pill bg-brand-700 text-[13px] font-semibold text-white"
+                    >
+                      Aprovar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReceiptStatus(item.id, "rejected")}
+                      className="h-10 rounded-pill bg-danger-500 text-[13px] font-semibold text-white"
+                    >
+                      Rejeitar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       </div>
 

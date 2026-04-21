@@ -15,7 +15,7 @@ import { usePaymentStore } from "@/store/usePaymentStore";
 import type { PaymentWithPassenger } from "@/store/usePaymentStore";
 import type { Route } from "@/types";
 
-const routes: Route[] = ["IFPI", "UESPI", "UFPI", "CONTRATOS"];
+const routes: Route[] = ["IFPI", "UESPI", "UFPI", "R.SÁ", "CONTRATOS"];
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -69,9 +69,9 @@ export function PassengersPage() {
     setSearchParams({});
   };
 
-  const savePassenger = () => {
+  const savePassenger = async () => {
     if (!canSave) return;
-    addPassenger({
+    await addPassenger({
       nome: nome.trim(),
       telefone,
       rota,
@@ -186,9 +186,9 @@ export function PassengersPage() {
               <button
                 aria-label="Excluir passageiro"
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   if (!window.confirm("Tem certeza que deseja remover este passageiro?")) return;
-                  deletePassenger(selected.passenger.id);
+                  await deletePassenger(selected.passenger.id);
                   setSelected(null);
                 }}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-pill bg-danger-500 text-[13px] font-semibold text-white"

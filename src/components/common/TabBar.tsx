@@ -12,9 +12,9 @@ export function TabBar() {
   const reduced = useReducedMotion();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 mx-auto flex h-[80px] w-full max-w-[480px] items-start border-t border-black/5 bg-white px-2 pt-2 pb-[calc(8px+env(safe-area-inset-bottom))] shadow-[0_-2px_10px_rgba(0,0,0,0.04)]">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 mx-auto flex h-[84px] w-full max-w-[480px] items-start border-t border-black/5 bg-white px-2 pt-1 pb-[calc(12px+env(safe-area-inset-bottom))] shadow-[0_-2px_10px_rgba(0,0,0,0.04)]">
       {items.map(({ to, label, Icon }) => (
-        <NavLink key={to} to={to} end={to === "/dashboard-admin"} className="relative flex flex-1 flex-col items-center gap-1 pt-1 text-center">
+        <NavLink key={to} to={to} end={to === "/dashboard-admin"} className="relative flex flex-1 -translate-y-1 flex-col items-center gap-1 pt-1 text-center">
           {({ isActive }) => (
             <>
               <span className="relative h-[7px]">

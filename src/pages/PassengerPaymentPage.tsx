@@ -1,7 +1,8 @@
 ﻿import { ArrowLeft, Copy, QrCode, Paperclip } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
+import { apiUploadReceipt } from "@/services/api";
 import { useAuthStore } from "@/store/useAuthStore";
 import { usePaymentStore } from "@/store/usePaymentStore";
 import { createPixPayload } from "@/utils/pix";
@@ -9,6 +10,13 @@ import { createPixPayload } from "@/utils/pix";
 const PIX_KEY = "pix@minhavan.com";
 
 type ReceiptStatus = "pendente" | "em_analise" | "aprovado" | "rejeitado";
+
+function mapReceiptStatus(status?: string): ReceiptStatus {
+  if (status === "in_review") return "em_analise";
+  if (status === "approved") return "aprovado";
+  if (status === "rejected") return "rejeitado";
+  return "pendente";
+}
 
 export function PassengerPaymentPage() {
   const navigate = useNavigate();
@@ -22,6 +30,7 @@ export function PassengerPaymentPage() {
   const [copiedPayload, setCopiedPayload] = useState(false);
   const [copiedKey, setCopiedKey] = useState(false);
   const [receiptStatus, setReceiptStatus] = useState<ReceiptStatus>("pendente");
+  const [uploadingReceipt, setUploadingReceipt] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const passenger = passengers.find((item) => item.id === user?.passengerId) ?? null;
@@ -46,6 +55,11 @@ export function PassengerPaymentPage() {
     });
   }, [passenger, row, amount, year, month]);
 
+  useEffect(() => {
+    if (!row) return;
+    setReceiptStatus(mapReceiptStatus(row.payment.receiptStatus));
+  }, [row]);
+
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(payload)}`;
 
   async function copyPayload() {
@@ -63,6 +77,20 @@ export function PassengerPaymentPage() {
 
   function openFileSelector() {
     fileInputRef.current?.click();
+  }
+
+  async function handleReceiptUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploadingReceipt(true);
+    try {
+      await apiUploadReceipt(file, month, year);
+      setReceiptStatus("em_analise");
+    } finally {
+      setUploadingReceipt(false);
+      event.target.value = "";
+    }
   }
 
   if (!passenger || !row) {
@@ -116,15 +144,20 @@ export function PassengerPaymentPage() {
         {receiptStatus === "rejeitado" ? (
           <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">Comprovante rejeitado. Reenvie.</p>
         ) : null}
+        {receiptStatus === "aprovado" ? (
+          <p className="mt-2 rounded-xl bg-green-50 px-3 py-2 text-sm text-green-700">Comprovante aprovado.</p>
+        ) : null}
+
         <button
           type="button"
           onClick={openFileSelector}
+          disabled={uploadingReceipt}
           className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#D1D5DB] px-4 text-sm font-semibold text-[#374151]"
         >
           <Paperclip className="h-4 w-4" />
-          {receiptStatus === "rejeitado" ? "Reenviar comprovante" : "Enviar comprovante"}
+          {uploadingReceipt ? "Enviando..." : receiptStatus === "rejeitado" ? "Reenviar comprovante" : "Enviar comprovante"}
         </button>
-        <input ref={fileInputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={() => setReceiptStatus("em_analise")} />
+        <input ref={fileInputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleReceiptUpload} />
       </div>
 
       <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">

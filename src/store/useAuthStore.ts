@@ -1,5 +1,8 @@
-﻿import { create } from "zustand";
+import { create } from "zustand";
 import { persist } from "zustand/middleware";
+
+import { apiLogin, apiRegister, setAuthToken } from "@/services/api";
+import type { Route } from "@/types";
 
 export type UserRole = "admin" | "passenger";
 
@@ -10,34 +13,20 @@ export interface SessionUser {
   passengerId?: string;
 }
 
-interface Account {
-  id: string;
-  email: string;
-  password: string;
-  role: UserRole;
-  passengerId?: string;
-}
-
-const ADMIN_EMAILS = ["admin@minhavan.com", "motorista@minhavan.com"];
-
-const ACCOUNTS: Account[] = [
-  { id: "u-admin", email: "admin@minhavan.com", password: "123456", role: "admin" },
-  { id: "u-p01", email: "ana@ifpi.com", password: "123456", role: "passenger", passengerId: "p01" },
-  { id: "u-p02", email: "bruno@ifpi.com", password: "123456", role: "passenger", passengerId: "p02" },
-  { id: "u-p05", email: "mariana@ifpi.com", password: "123456", role: "passenger", passengerId: "p05" },
-  { id: "u-p07", email: "gabriela@uespi.com", password: "123456", role: "passenger", passengerId: "p07" },
-  { id: "u-p12", email: "daniel@ufpi.com", password: "123456", role: "passenger", passengerId: "p12" },
-  { id: "u-p18", email: "carlos@contratos.com", password: "123456", role: "passenger", passengerId: "p18" },
-];
-
-function detectRoleFromEmail(email: string): UserRole {
-  return ADMIN_EMAILS.includes(email.toLowerCase()) ? "admin" : "passenger";
-}
-
 interface AuthStore {
   user: SessionUser | null;
+  token: string | null;
   ready: boolean;
   login: (email: string, password: string) => Promise<SessionUser>;
+  register: (payload: {
+    nome: string;
+    email: string;
+    telefone: string;
+    rota: Route;
+    mensalidade: number;
+    diaVencimento: number;
+    password: string;
+  }) => Promise<void>;
   logout: () => void;
   setReady: (value: boolean) => void;
 }
@@ -46,34 +35,43 @@ export const useAuthStore = create<AuthStore>()(
   persist(
     (set) => ({
       user: null,
+      token: null,
       ready: false,
       setReady: (value) => set({ ready: value }),
       login: async (email, password) => {
-        const normalizedEmail = email.trim().toLowerCase();
-        const account = ACCOUNTS.find((item) => item.email === normalizedEmail);
-
-        if (!account || account.password !== password) {
-          throw new Error("INVALID_CREDENTIALS");
-        }
-
-        const role = account.role ?? detectRoleFromEmail(normalizedEmail);
+        const { token, user } = await apiLogin(email.trim().toLowerCase(), password);
+        setAuthToken(token);
         const sessionUser: SessionUser = {
-          id: account.id,
-          email: account.email,
-          role,
-          passengerId: account.passengerId,
+          id: user.id,
+          email: user.email,
+          role: user.role,
+          passengerId: user.passengerId,
         };
-
-        set({ user: sessionUser });
+        set({ token, user: sessionUser });
         return sessionUser;
       },
-      logout: () => set({ user: null }),
+      register: async (payload) => {
+        await apiRegister({
+          ...payload,
+          email: payload.email.trim().toLowerCase(),
+        });
+      },
+      logout: () => {
+        setAuthToken(null);
+        set({ user: null, token: null });
+      },
     }),
     {
-      name: "van-auth-v1",
+      name: "van-auth-v2",
+      partialize: (state) => ({
+        user: state.user,
+        token: state.token,
+      }),
       onRehydrateStorage: () => (state) => {
+        setAuthToken(state?.token ?? null);
         state?.setReady(true);
       },
     },
   ),
 );
+

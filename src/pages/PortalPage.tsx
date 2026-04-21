@@ -11,19 +11,20 @@ import { digitsOnly } from "@/utils/phone";
 
 export function PortalPage() {
   const findByPhone = usePaymentStore((state) => state.findByPhone);
+  type LookupResult = Awaited<ReturnType<typeof findByPhone>>;
 
   const [phone, setPhone] = useState("");
-  const [result, setResult] = useState<ReturnType<typeof findByPhone>>(null);
+  const [result, setResult] = useState<LookupResult>(null);
   const [searched, setSearched] = useState(false);
 
-  const onSearch = () => {
+  const onSearch = async () => {
     setSearched(true);
     if (digitsOnly(phone).length !== 11) {
       setResult(null);
       return;
     }
 
-    const found = findByPhone(phone);
+    const found = await findByPhone(phone);
     setResult(found);
   };
 

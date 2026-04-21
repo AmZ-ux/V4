@@ -1,7 +1,7 @@
 import type { Route } from "@/types";
 import type { RouteFilter } from "@/hooks/usePassengers";
 
-const chips: RouteFilter[] = ["Todas", "IFPI", "UESPI", "UFPI", "CONTRATOS"];
+const chips: RouteFilter[] = ["Todas", "IFPI", "UESPI", "UFPI", "R.SÁ", "CONTRATOS"];
 
 export function RouteFilterChips({ value, onChange }: { value: RouteFilter; onChange: (value: RouteFilter) => void }) {
   return (
@@ -23,5 +23,5 @@ export function RouteFilterChips({ value, onChange }: { value: RouteFilter; onCh
   );
 }
 
-const _typeCheck: Route[] = ["IFPI", "UESPI", "UFPI", "CONTRATOS"];
+const _typeCheck: Route[] = ["IFPI", "UESPI", "UFPI", "R.SÁ", "CONTRATOS"];
 void _typeCheck;

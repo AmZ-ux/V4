@@ -1,12 +1,18 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 
-import { CURRENT_MONTH, passengers as initialPassengers, payments as initialPayments } from "@/data/mockData";
+import {
+  apiBootstrap,
+  apiCreatePassenger,
+  apiDeletePassenger,
+  apiLookupByPhone,
+  apiMarkAsPaid,
+  apiRestoreDate,
+} from "@/services/api";
 import type { CurrentMonth, Passenger, Payment, PaymentStatus, Route } from "@/types";
 import { digitsOnly } from "@/utils/phone";
 import { todayIsoDate } from "@/utils/date";
 
-const ROUTE_ORDER: Route[] = ["IFPI", "UESPI", "UFPI", "CONTRATOS"];
+const ROUTE_ORDER: Route[] = ["IFPI", "UESPI", "UFPI", "R.SÁ", "CONTRATOS"];
 
 export function getPaymentStatus(payment: Payment, passenger: Passenger, today = new Date()): PaymentStatus {
   if (payment.dataPagamento) return "pago";
@@ -39,6 +45,9 @@ interface PaymentStore {
   currentMonth: CurrentMonth;
   passengers: Passenger[];
   payments: Payment[];
+  hydrated: boolean;
+  hydrateFromServer: () => Promise<void>;
+  clear: () => void;
   monthPayments: (month?: number, year?: number) => PaymentWithPassenger[];
   totalExpectedInMonth: (month?: number, year?: number) => number;
   totalReceivedInMonth: (month?: number, year?: number) => number;
@@ -48,12 +57,12 @@ interface PaymentStore {
   routeSummary: (month?: number, year?: number) => Array<{ rota: Route; paid: number; total: number }>;
   markAsPaid: (passengerId: string, month: number, year?: number) => void;
   restorePaymentDate: (passengerId: string, month: number, previousDate: string | null, year?: number) => void;
-  addPassenger: (payload: Omit<Passenger, "id">) => void;
-  deletePassenger: (passengerId: string) => void;
-  findByPhone: (phone: string) => {
+  addPassenger: (payload: Omit<Passenger, "id">) => Promise<Passenger>;
+  deletePassenger: (passengerId: string) => Promise<void>;
+  findByPhone: (phone: string) => Promise<{
     passenger: Passenger;
     history: PassengerMonthHistory[];
-  } | null;
+  } | null>;
 }
 
 function resolveMonthYear(month: number | undefined, year: number | undefined, current: CurrentMonth) {
@@ -78,162 +87,171 @@ function defaultPaymentFor(passenger: Passenger, month: number, year: number): P
   };
 }
 
-export const usePaymentStore = create<PaymentStore>()(
-  persist(
-    (set, get) => ({
-      currentMonth: CURRENT_MONTH,
-      passengers: [...initialPassengers].sort(comparePassengers),
-      payments: initialPayments,
+export const usePaymentStore = create<PaymentStore>()((set, get) => ({
+  currentMonth: { mes: 5, ano: 2026 },
+  passengers: [],
+  payments: [],
+  hydrated: false,
 
-      monthPayments: (monthArg, yearArg) => {
-        const { passengers, payments, currentMonth } = get();
-        const { month, year } = resolveMonthYear(monthArg, yearArg, currentMonth);
+  hydrateFromServer: async () => {
+    const bootstrap = await apiBootstrap();
+    set({
+      currentMonth: bootstrap.currentMonth,
+      passengers: [...bootstrap.passengers].sort(comparePassengers),
+      payments: bootstrap.payments,
+      hydrated: true,
+    });
+  },
 
-        return passengers
-          .map((passenger) => {
-            const payment =
-              payments.find((item) => item.passengerId === passenger.id && item.mes === month && item.ano === year) ??
-              defaultPaymentFor(passenger, month, year);
-            return {
-              passenger,
-              payment,
-              status: getPaymentStatus(payment, passenger),
-            };
-          })
-          .sort((a, b) => comparePassengers(a.passenger, b.passenger));
-      },
+  clear: () => {
+    set({
+      currentMonth: { mes: 5, ano: 2026 },
+      passengers: [],
+      payments: [],
+      hydrated: false,
+    });
+  },
 
-      totalExpectedInMonth: (monthArg, yearArg) => {
-        const rows = get().monthPayments(monthArg, yearArg);
-        return rows.reduce((sum, row) => sum + row.payment.valor, 0);
-      },
+  monthPayments: (monthArg, yearArg) => {
+    const { passengers, payments, currentMonth } = get();
+    const { month, year } = resolveMonthYear(monthArg, yearArg, currentMonth);
 
-      totalReceivedInMonth: (monthArg, yearArg) =>
-        get()
-          .monthPayments(monthArg, yearArg)
-          .reduce((sum, item) => (item.payment.dataPagamento ? sum + item.payment.valor : sum), 0),
-
-      paidCountInMonth: (monthArg, yearArg) => get().monthPayments(monthArg, yearArg).filter((item) => item.status === "pago").length,
-      pendingCountInMonth: (monthArg, yearArg) => get().monthPayments(monthArg, yearArg).filter((item) => item.status === "pendente").length,
-      overdueCountInMonth: (monthArg, yearArg) => get().monthPayments(monthArg, yearArg).filter((item) => item.status === "atrasado").length,
-
-      routeSummary: (monthArg, yearArg) => {
-        const base = ROUTE_ORDER.map((rota) => ({ rota, paid: 0, total: 0 }));
-        for (const row of get().monthPayments(monthArg, yearArg)) {
-          const target = base.find((x) => x.rota === row.passenger.rota);
-          if (!target) continue;
-          target.total += 1;
-          if (row.status === "pago") target.paid += 1;
-        }
-        return base;
-      },
-
-      markAsPaid: (passengerId, monthArg, yearArg) => {
-        const { currentMonth } = get();
-        const { month, year } = resolveMonthYear(monthArg, yearArg, currentMonth);
-        const id = paymentIdFor(passengerId, month, year);
-
-        set((state) => ({
-          payments: (() => {
-            const existing = state.payments.find((payment) => payment.passengerId === passengerId && payment.mes === month && payment.ano === year);
-            if (!existing) {
-              const passenger = state.passengers.find((item) => item.id === passengerId);
-              if (!passenger) return state.payments;
-              return [
-                ...state.payments,
-                {
-                  id,
-                  passengerId,
-                  mes: month,
-                  ano: year,
-                  valor: passenger.mensalidade,
-                  dataPagamento: todayIsoDate(),
-                },
-              ];
-            }
-
-            return state.payments.map((payment) =>
-              payment.passengerId === passengerId && payment.mes === month && payment.ano === year
-                ? { ...payment, dataPagamento: payment.dataPagamento ?? todayIsoDate() }
-                : payment,
-            );
-          })(),
-        }));
-      },
-
-      restorePaymentDate: (passengerId, monthArg, previousDate, yearArg) => {
-        const { currentMonth } = get();
-        const { month, year } = resolveMonthYear(monthArg, yearArg, currentMonth);
-
-        set((state) => {
-          const existing = state.payments.find((payment) => payment.passengerId === passengerId && payment.mes === month && payment.ano === year);
-          if (!existing) return state;
-          return {
-            payments: state.payments.map((payment) =>
-              payment.passengerId === passengerId && payment.mes === month && payment.ano === year
-                ? { ...payment, dataPagamento: previousDate }
-                : payment,
-            ),
-          };
-        });
-      },
-
-      addPassenger: (payload) => {
-        const newId = `p${String(get().passengers.length + 1).padStart(2, "0")}`;
-        const { currentMonth } = get();
-        const newPassenger: Passenger = { id: newId, ...payload };
-        const newPayment: Payment = {
-          id: `pay-${newId}-${currentMonth.ano}-${String(currentMonth.mes).padStart(2, "0")}`,
-          passengerId: newId,
-          mes: currentMonth.mes,
-          ano: currentMonth.ano,
-          valor: payload.mensalidade,
-          dataPagamento: null,
-        };
-
-        set((state) => ({
-          passengers: [...state.passengers, newPassenger].sort(comparePassengers),
-          payments: [...state.payments, newPayment],
-        }));
-      },
-
-      deletePassenger: (passengerId) => {
-        set((state) => ({
-          passengers: state.passengers.filter((p) => p.id !== passengerId),
-          payments: state.payments.filter((p) => p.passengerId !== passengerId),
-        }));
-      },
-
-      findByPhone: (phone) => {
-        const normalizedPhone = digitsOnly(phone);
-        const { passengers, currentMonth } = get();
-        const passenger = passengers.find((item) => digitsOnly(item.telefone) === normalizedPhone);
-        if (!passenger) return null;
-
-        const history: PassengerMonthHistory[] = [];
-        for (let index = 0; index < 6; index += 1) {
-          const currentDate = new Date(currentMonth.ano, currentMonth.mes - 1 - index, 1);
-          const month = currentDate.getMonth() + 1;
-          const year = currentDate.getFullYear();
-          const payment =
-            get().payments.find((item) => item.passengerId === passenger.id && item.mes === month && item.ano === year) ??
-            defaultPaymentFor(passenger, month, year);
-          history.push({
-            month,
-            year,
-            payment,
-            status: getPaymentStatus(payment, passenger),
-          });
-        }
-
+    return passengers
+      .map((passenger) => {
+        const payment =
+          payments.find((item) => item.passengerId === passenger.id && item.mes === month && item.ano === year) ??
+          defaultPaymentFor(passenger, month, year);
         return {
           passenger,
-          history,
+          payment,
+          status: getPaymentStatus(payment, passenger),
         };
-      },
-    }),
-    {
-      name: "van-ease-pay-v2",
-    },
-  ),
-);
+      })
+      .sort((a, b) => comparePassengers(a.passenger, b.passenger));
+  },
+
+  totalExpectedInMonth: (monthArg, yearArg) => {
+    const rows = get().monthPayments(monthArg, yearArg);
+    return rows.reduce((sum, row) => sum + row.payment.valor, 0);
+  },
+
+  totalReceivedInMonth: (monthArg, yearArg) =>
+    get()
+      .monthPayments(monthArg, yearArg)
+      .reduce((sum, item) => (item.payment.dataPagamento ? sum + item.payment.valor : sum), 0),
+
+  paidCountInMonth: (monthArg, yearArg) => get().monthPayments(monthArg, yearArg).filter((item) => item.status === "pago").length,
+  pendingCountInMonth: (monthArg, yearArg) => get().monthPayments(monthArg, yearArg).filter((item) => item.status === "pendente").length,
+  overdueCountInMonth: (monthArg, yearArg) => get().monthPayments(monthArg, yearArg).filter((item) => item.status === "atrasado").length,
+
+  routeSummary: (monthArg, yearArg) => {
+    const base = ROUTE_ORDER.map((rota) => ({ rota, paid: 0, total: 0 }));
+    for (const row of get().monthPayments(monthArg, yearArg)) {
+      const target = base.find((x) => x.rota === row.passenger.rota);
+      if (!target) continue;
+      target.total += 1;
+      if (row.status === "pago") target.paid += 1;
+    }
+    return base;
+  },
+
+  markAsPaid: (passengerId, monthArg, yearArg) => {
+    const { currentMonth } = get();
+    const { month, year } = resolveMonthYear(monthArg, yearArg, currentMonth);
+
+    set((state) => ({
+      payments: (() => {
+        const existing = state.payments.find((payment) => payment.passengerId === passengerId && payment.mes === month && payment.ano === year);
+        if (!existing) {
+          const passenger = state.passengers.find((item) => item.id === passengerId);
+          if (!passenger) return state.payments;
+          return [
+            ...state.payments,
+            {
+              id: paymentIdFor(passengerId, month, year),
+              passengerId,
+              mes: month,
+              ano: year,
+              valor: passenger.mensalidade,
+              dataPagamento: todayIsoDate(),
+            },
+          ];
+        }
+
+        return state.payments.map((payment) =>
+          payment.passengerId === passengerId && payment.mes === month && payment.ano === year
+            ? { ...payment, dataPagamento: payment.dataPagamento ?? todayIsoDate() }
+            : payment,
+        );
+      })(),
+    }));
+
+    void apiMarkAsPaid(passengerId, month, year).catch(() => {
+      // keep optimistic update to avoid disrupting current UX
+    });
+  },
+
+  restorePaymentDate: (passengerId, monthArg, previousDate, yearArg) => {
+    const { currentMonth } = get();
+    const { month, year } = resolveMonthYear(monthArg, yearArg, currentMonth);
+
+    set((state) => ({
+      payments: state.payments.map((payment) =>
+        payment.passengerId === passengerId && payment.mes === month && payment.ano === year
+          ? { ...payment, dataPagamento: previousDate }
+          : payment,
+      ),
+    }));
+
+    void apiRestoreDate(passengerId, month, year, previousDate).catch(() => {
+      // keep optimistic update to avoid disrupting current UX
+    });
+  },
+
+  addPassenger: async (payload) => {
+    const created = await apiCreatePassenger(payload);
+    set((state) => ({
+      passengers: [...state.passengers, created].sort(comparePassengers),
+      payments: [
+        ...state.payments,
+        {
+          id: paymentIdFor(created.id, state.currentMonth.mes, state.currentMonth.ano),
+          passengerId: created.id,
+          mes: state.currentMonth.mes,
+          ano: state.currentMonth.ano,
+          valor: created.mensalidade,
+          dataPagamento: null,
+        },
+      ],
+    }));
+    return created;
+  },
+
+  deletePassenger: async (passengerId) => {
+    await apiDeletePassenger(passengerId);
+    set((state) => ({
+      passengers: state.passengers.filter((p) => p.id !== passengerId),
+      payments: state.payments.filter((p) => p.passengerId !== passengerId),
+    }));
+  },
+
+  findByPhone: async (phone) => {
+    const normalizedPhone = digitsOnly(phone);
+    if (normalizedPhone.length !== 11) return null;
+
+    try {
+      const result = await apiLookupByPhone(phone);
+      const passenger = result.passenger;
+      const history = result.history.map((payment) => ({
+        month: payment.mes,
+        year: payment.ano,
+        payment,
+        status: getPaymentStatus(payment, passenger),
+      }));
+      return { passenger, history };
+    } catch {
+      return null;
+    }
+  },
+}));
+

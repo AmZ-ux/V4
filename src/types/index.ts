@@ -1,4 +1,4 @@
-export type Route = "IFPI" | "UESPI" | "UFPI" | "CONTRATOS";
+export type Route = "IFPI" | "UESPI" | "UFPI" | "R.SÁ" | "CONTRATOS";
 export type PaymentStatus = "pago" | "pendente" | "atrasado";
 
 export interface Passenger {
@@ -17,6 +17,9 @@ export interface Payment {
   ano: number;
   valor: number;
   dataPagamento: string | null;
+  receiptStatus?: "none" | "in_review" | "approved" | "rejected";
+  receiptFile?: string | null;
+  receiptUploadedAt?: string | null;
 }
 
 export interface CurrentMonth {

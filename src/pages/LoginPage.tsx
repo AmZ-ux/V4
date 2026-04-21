@@ -1,11 +1,12 @@
 ﻿import { Eye, EyeOff, Mail, Bus } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { useAuthStore } from "@/store/useAuthStore";
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const login = useAuthStore((state) => state.login);
   const user = useAuthStore((state) => state.user);
 
@@ -15,9 +16,12 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  if (user) {
+  const cadastroSucesso = searchParams.get("cadastro") === "sucesso";
+
+  useEffect(() => {
+    if (!user) return;
     navigate(user.role === "admin" ? "/dashboard-admin" : "/passageiro", { replace: true });
-  }
+  }, [user, navigate]);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -35,7 +39,7 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[#F9FAFB] px-6">
+    <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-[#F9FAFB] px-safe pb-safe pt-safe">
       <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-[#14B8A6] text-white">
         <Bus className="h-10 w-10" />
       </div>
@@ -89,6 +93,12 @@ export function LoginPage() {
           </div>
         ) : null}
 
+        {cadastroSucesso ? (
+          <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3">
+            <p className="text-center text-sm text-green-700">Cadastro realizado! Faca login para continuar.</p>
+          </div>
+        ) : null}
+
         <button
           type="submit"
           disabled={loading}
@@ -101,6 +111,10 @@ export function LoginPage() {
           Esqueci minha senha
         </button>
 
+        <button type="button" onClick={() => navigate("/cadastro")} className="text-sm font-semibold text-[#0F766E]">
+          Criar conta
+        </button>
+
         <div className="rounded-xl border border-[#D1D5DB] bg-white px-4 py-3 text-xs text-[#6B7280]">
           <p>Demo admin: admin@minhavan.com / 123456</p>
           <p>Demo passageiro: ana@ifpi.com / 123456</p>
@@ -109,5 +123,3 @@ export function LoginPage() {
     </div>
   );
 }
-
-

@@ -1,9 +1,10 @@
-﻿import { useState, type ReactNode } from "react";
+﻿import { useEffect, useState, type ReactNode } from "react";
 import { ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { ScreenHeaderGreen } from "@/components/common/ScreenHeaderGreen";
 import { Toast } from "@/components/common/Toast";
+import { apiGetSettings, apiUpdateSettings } from "@/services/api";
 import { useAuthStore } from "@/store/useAuthStore";
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -60,8 +61,37 @@ export function SettingsPage() {
 
   const [autenticacaoAtiva, setAutenticacaoAtiva] = useState(false);
 
-  const handleSave = () => {
-    setToast("Configuracoes salvas.");
+  useEffect(() => {
+    apiGetSettings()
+      .then((settings) => {
+        setPixKey(settings.pixKey);
+        setDiaVencimento(String(settings.dueDayDefault));
+        setDefaultMessage(settings.defaultMessage);
+        setMensagemAtraso(settings.lateMessage);
+        setMensagemConfirmacao(settings.confirmationMessage);
+        setEnvioAutomatico(settings.autoSend);
+        setDiasLembrete(String(settings.reminderDays));
+      })
+      .catch(() => {
+        // fallback to local defaults
+      });
+  }, []);
+
+  const handleSave = async () => {
+    try {
+      await apiUpdateSettings({
+        pixKey: pixKey || "pix@minhavan.com",
+        dueDayDefault: Number(diaVencimento) || 10,
+        defaultMessage: defaultMessage || "Ola! Lembrete da mensalidade.",
+        lateMessage: mensagemAtraso || "Sua mensalidade esta em atraso. Pode confirmar o pagamento?",
+        confirmationMessage: mensagemConfirmacao || "Pagamento confirmado. Obrigado!",
+        autoSend: envioAutomatico,
+        reminderDays: Number(diasLembrete) || 3,
+      });
+      setToast("Configuracoes salvas.");
+    } catch {
+      setToast("Falha ao salvar configuracoes.");
+    }
     window.setTimeout(() => setToast(null), 2200);
   };
 
