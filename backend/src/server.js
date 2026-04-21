@@ -31,6 +31,10 @@ const app = express();
 const PORT = Number(process.env.PORT || 4000);
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
 const requestBuckets = new Map();
+const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || "http://localhost:5173")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -74,7 +78,16 @@ function rateLimit({ keyPrefix, limit, windowMs }) {
   };
 }
 
-app.use(cors({ origin: true, credentials: false }));
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin) return callback(null, true);
+      if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+      return callback(new Error("CORS_NOT_ALLOWED"));
+    },
+    credentials: false,
+  }),
+);
 app.use(requestLogger);
 app.use(express.json());
 app.use("/uploads", express.static(UPLOADS_DIR));

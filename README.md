@@ -69,6 +69,7 @@ Backend (`backend/.env` opcional):
 ```env
 PORT=4000
 JWT_SECRET=troque-esta-chave-em-producao
+CORS_ORIGINS=http://localhost:5173,https://seu-frontend.vercel.app
 ```
 
 ## Contas iniciais (seed)
